@@ -10,6 +10,7 @@ Designkilden er fortsat OpenDesign-projektet `8cc24855-1ec8-45b3-8f21-f516b28fa6
 | Rammesætning | Beslutning |
 |---|---|
 | Stack | Next.js 16.4.6, React 19.3.1, TypeScript strict |
+| Framework-funktioner | Next 16.4 giver **Turbopack som standard** (2–5× hurtigere builds), **Cache Components med `use cache`** og `proxy.ts` i stedet for `middleware.ts`. Vi bruger `use cache` på opskriftsbank og statiske data — **aldrig** på priser eller tilbud uden tidsstempel (en forkert pris i butikken er værre end ingen). |
 | Farver | `design/tokens.css` er **eneste** farvekilde. Ingen hex-koder i komponenter. |
 | Visuel sandhed | `assets/gaffel.css` fra prototypen er referencen; én screenshot-baseline pr. skærm før den regnes som færdig |
 | Test | Intet nyt test-framework i første iteration. Gate = `next build` + `tsc --noEmit` + manuel a11y-tjekliste (afsnit 1.9) |
@@ -243,6 +244,14 @@ Den bruges som standardudbyder gennem `createOpenAICompatible({ baseURL })`. Der
 
 **Grænse:** ingen model i prisberegning, uge-validering eller bon-afstemning. Modellen må *foreslå*; aritmetikken er deterministisk kode, så tallene altid kan efterprøves. Nye nøgler lander i `.env.local` **og** Vercel-prod — aldrig kun det ene sted.
 
+**AI SDK 7 er ikke kun `useChat`.** Versionen (juni 2026, nu 7.0.181) har tre ting der er værd at kende for Gaffel:
+
+- **`WorkflowAgent` + `@ai-sdk/workflow`:** varig, genoptagelig agent-kørsel der overlever genstarter og afbrydelser, med indbyggede godkendelser. Det er præcis formen "planlæg ugen i tre trin → brugeren godkender → ugen låses" har, hvis Copilot senere skal gøre mere end at svare.
+- **Typet tool-kontekst:** værktøjerne får delt, typet kontekst i stedet for at grave i global state — mindre overraskelse i et system hvor modellen kun må læse.
+- **Telemetri:** indbygget sporing pr. kald, så token-forbrug og fejl kan måles i stedet for gættes. Relevant for BYOK-brugere der betaler per token.
+
+Begynd med `useChat` + route handler; ryk til `WorkflowAgent` når Copilot får flertrinshandlinger med godkendelse.
+
 **CV:** "streaming Copilot med multi-provider BYOK via OpenAI-compatible endpoints, værktøjskald mod lokal SQLite og nøgler der aldrig forlader serveren." AI SDK er branchens standard for streaming-chat i React, så det er både et ærligt og et genkendeligt punkt.
 
 ### 2.2 Serwist — PWA der virker i butikken
@@ -348,6 +357,55 @@ Hvis trin 5 ikke kan bestå tjeklisten, er det signalet om at bruge base-ui i st
 
 **Stadig åbent — og det skal afgøres før Trin 7, ikke efter:**
 
-1. **Hosting af den lokale database.** `better-sqlite3` er et native modul og kræver en vedvarende disk; Vercel kører serverless uden disk. Tre veje: (a) selvhost på Mac'en/Docker, (b) Turso/libSQL (Drizzle-skiftet er lille, men datamodellen er så ikke længere lokal), (c) PWA + helt lokal lagring i browseren (kræver at al logik flyttes til klienten). **Anbefaling:** (a) til udvikling og personlig brug, og beslut (b) eller (c) først når der faktisk skal deles med andre. Vigtigt: dags dato er `better-sqlite3` det rigtige valg til udvikling — det er kun *deploy* der er spørgsmålet.
+1. ~~Hosting af den lokale database~~ **Afgjort 2026-11-25:** vi vælger (a) — `better-sqlite3` og selvhost til udvikling og personlig brug. Turso/libSQL eller ren browserlagring bliver først aktuel den dag Gaffel skal deles med andre; Drizzle-skiftet er lille nok til at vente til da. Ingen deploy-arkitektur bygges på spekulation.
 2. **Første rigtige bon-fixture.** Parserens kvalitet afhænger af rigtige boner, ikke opdigtede. Én anonymiseret bon fra Netto, REMA 1000 og Lidl er nok til at starte.
 3. **Standardmodel for Copilot.** Vælges når provider-factory'en skrives; den skal ikke pinnes i dokumentationen, men i konfiguration — samme regel som for Hermes' egne modeller.
+
+---
+
+## 6. Repoet, offentligheden og agent-harnesset
+
+### 6.1 Hvad der bliver offentligt
+
+Repoet er tænkt offentligt, og **alt i git er læsbart for alle**. Det betyder:
+
+| Fil | Offentlig? | Begrundelse |
+|---|---|---|
+| `docs/kodefase-beslutninger.md` (dette dokument) | **Ja** | Det er bevis på beslutningstagning — målinger, afvejninger, hvad der blev valgt fra og hvorfor. Det er den slags fil der gør et hobbyrepo troværdigt. |
+| Afsnit 1.10 (CV-formuleringer og interview-svar) | **Nej** | Det er ansøgningsstrategi, ikke projektviden. Flyt til det private jobstack-repo (`~/code/ai-job-search`) eller en gitignored `notes/`. Resten af dokumentet bliver i repoet. |
+| Bon-fixtures | **Kun anonymiserede** | Butik, dato og hvad husstanden har købt er persondata. Beløb og linjestruktur er nok til at teste parseren. |
+| `.env.local`, nøgler | **Nej, aldrig** | Gælder også eksempel-filer: `.env.example` med tomme værdier, intet andet. |
+
+Reglen er den samme som for de andre offentlige repoer: kode, beslutninger og anonymiserede fixtures ud; ansøgningsmateriale, persondata og nøgler ind.
+
+### 6.2 Skills — i repoet og i Hermes
+
+**I repoet** (committes, så alle agenter får samme kontekst):
+
+```bash
+npx skills add vercel-labs/ui --skill ui-sdk
+npx skills add vercel-labs/agent-skills --skill vercel-react-view-transitions
+```
+
+`SKILL.md`-formatet blev open standard i slutningen af 2025 og er pr. marts 2026 adopteret af 32 værktøjer (Claude Code, Codex, Cursor, Copilot, Gemini CLI, Goose, Amp …). At committe skills betyder at OpenCode, Codex og en fremtidig agent læser den samme, korrekte API-dokumentation i stedet for at gætte.
+
+**I Hermes** mangler der én skill: `gaffel-dev`. Den skal indeholde det der ellers skal genlæses hver session:
+
+- Gates: `next build` + `tsc --noEmit` + a11y-tjeklisten (1.9) + screenshot-baseline.
+- `tokens.css` som eneste farvekilde; ingen hex i komponenter.
+- Wrapper-konventionen (1.2 regel 3 og 5) og hvad der må importeres hvor.
+- Bon-invarianten `Varer − Rabatter = SUM` som hård gate.
+- At ui-sdk er pinnet og hvor exit-planen står.
+
+### 6.3 Agent-harnesset omkring projektet
+
+2026-litteraturen er entydig på ét punkt: **en agent er model + harness**, og kvaliteten afgøres af harnesset — gates, kontekst, tilladelser, review — ikke af modellen alene. Gaffels harness er `/oc-issue`-pipelinen: brief med verbatim regler, kodeagent, uafhængig QA-model, grøn gate, derefter merge.
+
+To ting der er værd at tilføje i praksis:
+
+1. **En lille eval-suite af rigtige briefs.** Ikke 100 syntetiske tests, men 10–15 opgaver hentet fra det der faktisk går galt (fx "tilføj kategori-filter til opskrifter", "parse en Netto-bon", "ret fokus i day-picker"). Målet er at se om coder + QA leverer en grøn gate uden menneskelig indblanding — og at opdage når et model- eller harness-skift gør det dårligere. Sammenlign kun inden for samme harness-version; ellers måler man to ting på én gang.
+2. **Gate proportional med blast radius.** Ren CSS og tekst: build + typecheck. Nyt library, schema eller auth: HermaGuard + en gennemlæsning af diffen før merge. Det er allerede reglen i den eksisterende pipeline — den skal bare følge med over i Gaffel.
+
+### 6.4 WebMCP — hold øje, byg ikke nu
+
+Chrome og Edge kører WebMCP som origin trial (Chrome 146+, Edge 153), og kun **Tools** er understøttet — ikke resources eller prompts. ui-sdk understøtter allerede broen, så den dag Chrome ruller det ud, er Gaffel klar hvis agent-broen (1.7) er slået til. Indtil da: ingen kode, ingen `data-agent-*` i produktion.
