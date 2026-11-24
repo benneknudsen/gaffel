@@ -13,8 +13,34 @@ Designkilden er fortsat OpenDesign-projektet `8cc24855-1ec8-45b3-8f21-f516b28fa6
 | Farver | `design/tokens.css` er **eneste** farvekilde. Ingen hex-koder i komponenter. |
 | Visuel sandhed | `assets/gaffel.css` fra prototypen er referencen; én screenshot-baseline pr. skærm før den regnes som færdig |
 | Test | Intet nyt test-framework i første iteration. Gate = `next build` + `tsc --noEmit` + manuel a11y-tjekliste (afsnit 1.9) |
-| Tailwind | **Ikke** i første iteration. Prototypen er 57 KB håndskrevet CSS der allerede er finpudset; en omskrivning til utilities koster designfidelity uden at give funktionalitet. (Vil du alligevel have det, står de præcise `@layer`-linjer i 1.4.) |
+| AI | Vercel AI SDK er **kerne fra start**, ikke et senere tilvalg (afsnit 2.1). Copilot er en hovedfunktion, ikke en detalje. |
+| CSS | Håndskrevet CSS med design-tokens + CSS Modules. **Ingen Tailwind** (afsnit 0.1). |
 | Sprog i UI | Dansk. Kodekommentarer og commits på engelsk. |
+
+### 0.1 CSS-arkitektur — beslutning: uden Tailwind
+
+Målt på prototypen (`assets/gaffel.css`, 2026-11-24):
+
+| Tal | Værdi |
+|---|---|
+| Linjer / regelblokke | 703 / 473 |
+| Navngivning | BEM hele vejen: `.nav__pill`, `.btn--ink`, `.od-load__ch` |
+| Egne CSS-variabler | 57 |
+| Media queries | 45 |
+| Keyframes | 17 |
+
+Det er afgørende for valget: 473 formålsbestemte regler med BEM og 17 keyframe-koreografier **kan ikke porteres** til utilities — de skal skrives om, og hver omskrivning er en lejlighed til at ramme ved siden af designet. De 45 breakpoints er redaktionelle (fx loaderens `clamp(52px, 11vw, 104px)` og navets 1560 px-kollaps), ikke de fire skærmstørrelser et utility-system arbejder i.
+
+**Beslutning:**
+
+- `app/globals.css` porterer prototypens CSS uændret, med `@layer tokens, base, components;` forrest og tokens i egen fil.
+- Nye komponenter får **CSS Modules** (`recipe-search.module.css`), så nye navne ikke kan kollidere med de globale BEM-klasser. Ported CSS bliver global, fordi den allerede er namespaced.
+- Styling af ui-sdk-dele sker på `[data-slot]` + `data-state` (afsnit 1.4), ikke via utilities.
+- Moderne CSS frem for et framework: `clamp()` til typografi, `@layer` til rækkefølge, `color-mix()` til tilstande, container queries i komponenter hvor bredden afgør layoutet — ikke viewporten.
+
+**CV-begrundelse for at vælge det fra:** Tailwind er allerede dækket af portfolio-repoet (`benjaminschou.dk`, Next 16 + TS + Tailwind). Gaffel bliver den anden, sjældnere historie: *design-tokens som eneste farvekilde, BEM + CSS Modules, moderne CSS og et designsystem porteret 1:1 fra et designtool*. To forskellige historier er mere værd end den samme to gange.
+
+**Hvis du alligevel vil have Tailwind** (og det er et legitimt ønske): så kun som layout-lag i ny, ikke-designet krom — `/dev/ui`, indstillingssider, fejltilstande — aldrig på de skærme OpenDesign har leveret. Rækkefølgen skal da være præcis som i 1.4, fordi Tailwinds preflight ellers nulstiller ui-sdk's basals.
 
 ---
 
@@ -193,13 +219,31 @@ Kriteriet for at komme på listen: det løser et behov Gaffel faktisk har, det e
 | 2.6 | `skills` CLI | 1.9.0 | Repoet leverer selv agent-skills |
 | 2.7 | Server Actions + `useOptimistic` | indbygget | "Lås uge" uden ventetid |
 
-### 2.1 AI SDK — Copilot med BYOK
+### 2.1 AI SDK — kerne fra start
 
-Gaffels Copilot skal kunne køre på brugerens egen nøgle hos flere udbydere. AI SDK giver streaming, værktøjskald og React-hooks (`useChat`) uden at binde sig til én udbyder; `createOpenAICompatible({ baseURL })` dækker alle OpenAI-kompatible endpoints, hvilket også er vejen til Nous Portal.
+Copilot er en hovedfunktion i Gaffel, ikke et tilvalg: den skal læse ugen, foreslå retter ud fra tilbudsaviser og husstandens præferencer, og svare på "hvad kan jeg lave i denne uge?". Derfor er AI SDK med fra første commit — ikke tilføjet senere som pynt.
 
-**Grænse:** ingen model i prisberegning eller uge-logik. Modellen må *foreslå*, resten er deterministisk kode. `.env.local` **og** Vercel-prod når nøgler tilføjes.
+Besluttede versioner: `ai` 7.0.181, `@ai-sdk/react` 4.0.186, `@ai-sdk/openai-compatible` 3.0.94.
 
-**CV:** AI SDK er branchens standard for streaming-chat i React; "multi-provider BYOK via OpenAI-compatible endpoints" er en konkret, verificerbar sætning.
+**Nous Portal som udbyder — verificeret 2026-11-24** i `~/.hermes/config.yaml`:
+
+```
+provider: nous
+base_url: https://inference-api.nousresearch.com/v1
+```
+
+Den bruges som standardudbyder gennem `createOpenAICompatible({ baseURL })`. Dermed er samme kodevej også vejen til alle andre OpenAI-kompatible endpoints, og BYOK bliver et spørgsmål om konfiguration, ikke om kode.
+
+**Arkitektur:**
+
+- Copilot-samtalen kører i en route handler (`app/api/copilot/route.ts`) og streames til `useChat` i klienten. Nøgler forlader aldrig serveren.
+- Udbyder og model vælges i en lille factory (`lib/ai/provider.ts`) ud fra husstandens indstillinger; ukendt udbyder = fejl, ikke stille fallback.
+- Modellen får **læseværktøjer** over den lokale database (ugens retter, priser, tilbud, lager) — ikke skriveadgang. Alt der ændrer ugen kræver et klik fra brugeren.
+- Prompten bærer husstandens kontekst (antal voksne/børn, butikker, "har hjemme", historik) som struktureret data, ikke som prosa der skal parses tilbage.
+
+**Grænse:** ingen model i prisberegning, uge-validering eller bon-afstemning. Modellen må *foreslå*; aritmetikken er deterministisk kode, så tallene altid kan efterprøves. Nye nøgler lander i `.env.local` **og** Vercel-prod — aldrig kun det ene sted.
+
+**CV:** "streaming Copilot med multi-provider BYOK via OpenAI-compatible endpoints, værktøjskald mod lokal SQLite og nøgler der aldrig forlader serveren." AI SDK er branchens standard for streaming-chat i React, så det er både et ærligt og et genkendeligt punkt.
 
 ### 2.2 Serwist — PWA der virker i butikken
 
@@ -243,6 +287,27 @@ Butiksskift ændrer 234,80 → 198,35. NumberFlow animerer cifrene korrekt (inkl
 
 "Lås uge" og "tilføj til uge" skal føles øjeblikkelige. Optimistisk UI med server action som sandhed, og rollback ved fejl. Ingen bibliotek — men et mønster der er værd at gøre rigtigt og omtale.
 
+### 2.8 Kvitteringsparseren — danske kæder, ikke én universel regex
+
+Gaffel kører **kun danske butikker** i v1. Det gør omfanget håndterbart, men det gør ikke én parser mulig: hver kæde har egen kolonneorden, egne rabatlinjer (`Rabat`, `Tilbud`, `-`), egne momsmarkeringer og egen footer. En universal-regex der "læser danske bonner" vil fejle stille på den tredje kæde.
+
+**Arkitektur:**
+
+- **Én konfiguration pr. kæde** (`lib/receipt/chains/netto.ts`, `rema1000.ts`, `lidl.ts`, …): layout-hints, kolonneorden, hvordan rabatlinjer ser ud, hvordan totalen markeres, og et lille sæt fixtures (rigtige boner, anonymiserede).
+- **Fælles motor** der bruger konfigurationen; ny kæde = ny fil + fixtures, ikke ændret motor.
+- **Aritmetisk gate:** `Varer − Rabatter = SUM` skal stemme på øre. Gør det ikke, afvises resultatet og brugeren får manuel indtastning — den regel er hele grunden til at feature'en kan bruges i virkeligheden. Prototypen har allerede tallene der skal reproducere: 176,45 + 70,55 = 247,00.
+- **Usikkerhed vises:** linjer under en konfidenstærskel markeres til gennemsyn, ikke skjules.
+
+**Kæder i v1:**
+
+| Niveau | Kæder |
+|---|---|
+| Primære (fixtures + tests) | Netto, REMA 1000, Lidl, Føtex, Bilka, 365discount |
+| Sekundære (konfiguration, lettere test) | SuperBrugsen, Kvickly, Brugsen/Dagli'Brugsen, MENY, SPAR, Min Købmand, ALDI |
+| Long tail | Løvbjerg, ABC Lavpris, Fleggaard, Calle, Otto Duborg, Poetzsch — via generisk konfiguration, tilføjes når en rigtig bon foreligger |
+
+**Privatliv:** boner indeholder butik, tidspunkt og hvad husstanden har købt. Alt bliver lokalt i SQLite; ingen bon-billeder eller linjer sendes til en model medmindre brugeren aktivt vælger det, og aldrig til et endpoint der logger dem.
+
 ---
 
 ## 3. Bevidst fravalgt
@@ -267,14 +332,22 @@ Butiksskift ændrer 234,80 → 198,35. NumberFlow animerer cifrene korrekt (inkl
 4. Installér ui-sdk pinnet + skills (1.3). **Gate:** `next build` grøn.
 5. Byg **én** wrapper: `recipe-search.tsx` (Combobox). Kør a11y-tjeklisten (1.9). **Gate:** alle 8 punkter.
 6. Byg `chip-group.tsx` og `day-picker.tsx` samme vej. **Gate:** samme liste + screenshot-baseline.
-7. Først derefter Drizzle + schema, Serwist, og til sidst Copilot (AI SDK).
+7. Drizzle + schema, derefter **AI SDK som kerne** (provider-factory, `/api/copilot`, `useChat`), og til sidst Serwist. Copilot er en hovedfunktion: den skal stå færdig sammen med uge-brættet, ikke bagefter.
 
 Hvis trin 5 ikke kan bestå tjeklisten, er det signalet om at bruge base-ui i stedet — og det er billigt at opdage på det tidspunkt, fordi der kun findes én wrapper.
 
 ---
 
-## 5. Åbne spørgsmål
+## 5. Afgjort, og hvad der stadig er åbent
 
-1. **Tailwind eller ej** — beslutningen i afsnit 0 er "nej, første iteration". Skal den genovervejes, gør det før trin 2, ikke efter.
-2. **Nous Portals OpenAI-kompatible baseURL** — slås op i `~/.hermes/config.yaml` / Portal-dokumentationen ved kodestart; den skrives ikke ind her som gæt.
-3. **Kvitteringsparserens domæne** — hvor mange danske butikskæder skal `Varer − Rabatter = SUM` kunne læse i v1? Påvirker om OCR overhovedet er nødvendig.
+**Afgjort i denne runde:**
+
+1. **CSS:** uden Tailwind — håndskrevet CSS med tokens + CSS Modules (afsnit 0.1).
+2. **Nous Portal-baseURL:** `https://inference-api.nousresearch.com/v1`, verificeret i `~/.hermes/config.yaml` 2026-11-24 (afsnit 2.1).
+3. **Butikker:** kun Danmark i v1; primære kæder med fixtures, sekundære med konfiguration, long tail når en rigtig bon foreligger (afsnit 2.8).
+
+**Stadig åbent — og det skal afgøres før Trin 7, ikke efter:**
+
+1. **Hosting af den lokale database.** `better-sqlite3` er et native modul og kræver en vedvarende disk; Vercel kører serverless uden disk. Tre veje: (a) selvhost på Mac'en/Docker, (b) Turso/libSQL (Drizzle-skiftet er lille, men datamodellen er så ikke længere lokal), (c) PWA + helt lokal lagring i browseren (kræver at al logik flyttes til klienten). **Anbefaling:** (a) til udvikling og personlig brug, og beslut (b) eller (c) først når der faktisk skal deles med andre. Vigtigt: dags dato er `better-sqlite3` det rigtige valg til udvikling — det er kun *deploy* der er spørgsmålet.
+2. **Første rigtige bon-fixture.** Parserens kvalitet afhænger af rigtige boner, ikke opdigtede. Én anonymiseret bon fra Netto, REMA 1000 og Lidl er nok til at starte.
+3. **Standardmodel for Copilot.** Vælges når provider-factory'en skrives; den skal ikke pinnes i dokumentationen, men i konfiguration — samme regel som for Hermes' egne modeller.
