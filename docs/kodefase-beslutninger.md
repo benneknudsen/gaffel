@@ -395,3 +395,57 @@ To ting der er værd at tilføje i praksis:
 ### 6.4 WebMCP — hold øje, byg ikke nu
 
 Chrome og Edge kører WebMCP som origin trial (Chrome 146+, Edge 153), og kun **Tools** er understøttet — ikke resources eller prompts. ui-sdk understøtter allerede broen, så den dag Chrome ruller det ud, er Gaffel klar hvis agent-broen (1.7) er slået til. Indtil da: ingen kode, ingen `data-agent-*` i produktion.
+
+---
+
+## 7. Hvordan Gaffel kører — distribution, husstande og adgang
+
+### 7.1 Det der allerede blev aftalt i designfasen
+
+Quick-Setup-skærmen i prototypen er bygget som **tre trin**, og de tre trin er i praksis aftalen:
+
+1. **Husstand & smagsprofil** — tællere for voksne og børn, børnefilter ("tag børneportion fra før chili"), fravalgte ingredienser.
+2. **Supermarkeder & postnummer** — hvilke kæder husstanden faktisk handler i.
+3. **BYOK AI-nøgle** — Gemini (gratis tier), Nous, OpenAI eller **lokal Ollama**.
+
+Dertil: åbent GitHub-repo, self-hosted, ingen konto påkrævet for at komme i gang.
+
+### 7.2 Hvad der *ikke* var besluttet — og anbefalingen
+
+| Spørgsmål | Anbefaling | Hvorfor |
+|---|---|---|
+| **Data model** | **Multi-husstand fra dag ét:** `household_id` på hver tabel | Eftermontering er dyrt og rammer hver query. Koster næsten intet nu. |
+| **Kørsel** | To tilstande af samme kode: (a) lokal/self-host, (b) hostet instans | Se 7.3. Forskellen skal være konfiguration, ikke en anden kodebase. |
+| **Login** | **Intet login i v1** ved self-host. Ved hostet: magic link på e-mail, eller **husstands-invite-kode** til partneren | OAuth kræver app-registrering, verificering og redirect-URI pr. deployment — det dræber self-host-historien. Google-login kan tilføjes senere via better-auth, når nogen beder om det. |
+| **BYOK** | Husstandens egen nøgle, **krypteret i hvile**, kun server-side. Plus en "AI fra"-tilstand | Alt andet i Gaffel virker uden model. Nøglen må aldrig i browseren, og Ollama-optionen gør det muligt at bruge appen helt uden at sende data væk. |
+| **Allergener** | **Strukturerede, ikke fritekst** — EU's 14 allergen-kategorier + egne, pr. familiemedlem. Hårdt filter | En ret med allergen skal *udelukkes*, ikke vises med en advarsel. Fravalgte ingredienser ("ingen indmad") er blødt: rangeres ned, ikke fjernet. |
+| **Børn** | `0..n` børn, ingen antagelse om at der er børn | Ingen børn = ingen børnefilter, ingen børnenoter i opskrifterne. Flere børn = portionsskalering og noter pr. barn. |
+| **Tilbudsdata** | Hentes server-side | Kilden (Tjek/TilbudsTrolden) må ikke kaldes fra browseren, og et API-token hører ikke i klienten. Det er også derfor ren statisk hosting ikke er nok. |
+
+### 7.3 De tre veje for venner og familie
+
+1. **Hostet instans (den nemme for familien).** Ét domæne, magic link, én husstand pr. bruger, partneren inviteres med en kode. Kræver Turso/libSQL i stedet for `better-sqlite3`, auth og et sted at køre tilbudsjobbet. Konsekvens: indkøbsdata ligger på en server — så kræver det dataminimering, sletning og at bonbilleder aldrig sendes til en model uden samtykke.
+2. **Self-host (den ærlige for dig og nørdede venner).** `docker run` eller `npx`, åbner `localhost:3000`, data i en lokal SQLite-fil, ingen konto. Det er den vej der matcher beslutningen i afsnit 5 (selvhost, `better-sqlite3`).
+3. **GitHub Pages / statisk hosting (ikke muligt).** Der skal være en server til tilbudsdata, bon-tolkning og BYOK-nøgler. En statisk eksport ville flytte nøglerne ud i browseren og gøre parseren afhængig af klienten.
+
+**Rækkefølgen bliver:** byg til (2) — det er din egen brug, det er billigst, og det er der hvor privatlivet er enkelt. Skriv koden så husstande og auth er et lag ovenpå (`household_id` i schema, al dataadgang gennem én repository-funktion), så (1) er en deploy-beslutning og ikke en omskrivning. Ingen auth i v1.
+
+### 7.4 Husstandsmodellen i praksis
+
+```
+households      id, navn, postnummer, oprettet
+members         id, household_id, rolle (voksen/barn), navn (valgfrit), fødselsår?
+member_allergens id, member_id, allergen (EU-14 eller egen), alvorlighed (hard/soft)
+household_prefs  household_id, butikker[], børnefilter, ugens aftener (3–5)
+```
+
+- **Portioner** skaleres fra antal medlemmer, ikke fra et hardkodet "2 voksne + 1 barn".
+- **Allergener er medlemsniveau**, ikke husstandsniveau — ellers kan man ikke håndtere "ét barn tåler ikke mælk".
+- **Alt andet** (ugeplan, indkøbsliste, prisbog, bonner) hænger på `household_id`.
+- Deling: `household_invites` med kode og udløb; rollerne er `owner` og `member`.
+
+### 7.5 Hvad der stadig skal besluttes
+
+1. **Skal den hostede instans bygges i v1, eller først når nogen spørger?** Anbefaling: først når nogen spørger — men schema og dataadgang skal være klar til det.
+2. **Login-metode ved hostet drift:** magic link eller husstands-invite-kode som eneste indgang? (Invite-kode alene er færrest friktionspunkter, men et mistet link betyder mistet husstand.)
+3. **Samtykke til bon-billeder:** skal OCR kunne køre helt lokalt (Ollama vision / Tesseract) for de husstande der ikke vil sende bonnen nogen steder?
