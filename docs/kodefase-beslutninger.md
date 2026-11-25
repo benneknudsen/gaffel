@@ -190,9 +190,21 @@ Det der gør arbejdet læsbart for en fremmed — og for en ansætter: `componen
 
 CV-formuleringer, interview-svar og hvad der ikke må overdrives ligger i jobstack-repoet (`~/code/ai-job-search/documents/projekter/gaffel-cv-materiale.md`) — ikke her, i et offentligt repo.
 
-### 1.11 Fire designrettelser — specifikation, afventer OpenDesign-run
+### 1.11 Fire designrettelser — kørt gennem OpenDesign
 
-Prototypen i OpenDesign er den UI-kilde koden skal porteres 1:1 fra, og **enhver designændring går gennem `start_run`** — samme sporing som kode går gennem `oc-issue`. De fire rettelser nedenfor er specificeret og ligger klar som run-prompt i `~/Desktop/gaffel-opendesign/gaffel-design-fixes-v8.md`. Indtil det run er kørt og godkendt, står prototypen urørt på versionen fra 17. november (verificeret fil for fil mod appens egen `.file-versions/`).
+Prototypen i OpenDesign er den UI-kilde koden skal porteres 1:1 fra, og **enhver designændring går gennem `start_run`** — samme sporing som kode går gennem `oc-issue`. Rettelserne nedenfor blev kørt som run **`0848ab62-ebdc-4606-8134-2aed47ee399c`** (agent `hermes`, model `nous:anthropic/claude-sonnet-5.5`, skill `frontend-design`, `deliverableValid: true`, 5 opdaterede filer). OpenDesign gemte selv en ny version af hver ændret fil i projektets `.file-versions/`, så runnet kan spores og rulles tilbage dér.
+
+Verifikation efter runnet — målt i browseren, ikke læst fra runnets egen rapport:
+
+- Bonen: `Varer 259,00 kr − rabatter 12,00 kr (3 linjer) = 247,00 kr`, tre og kun tre linjer med rabatunderlinje, 52 px på almindelige linjer og 66 px på de rabatterede; segmentknapper og priskolonne har samme vertikale midte (delta 0 px). Skift af en linje mellem Madplan og Diverse flytter beløbet korrekt (146,50 + 100,50 = 247,00) og efterlader rabatterne urørte.
+- Filtrene: `PROTEIN`-label (11 px, uppercase, letter-spacing .08em) på linje med chipsene, `role="group"` + `aria-labelledby`, kategorichips 44 px mod proteinchips 36 px, præcis to aktive chips ved `?protein=ingen`, intet vandret overløb ved 320/768/1280.
+- Opsætningen: feltet `Allergener i husstanden` med de otte allergener i to kolonner à 146×52 px og 8 px mellemrum; valget gemmes i `gaffel-setup-v1` som `allergens`, overlever reload, vises i trinopsummeringen ("· 2 allergener") og i opsummeringskortet (`allergener: mælk, nødder`), og bliver stående når antal børn sættes til 0.
+- Copy: alle seks gamle sætninger er væk, alle seks nye står præcis én gang; `henter avis …` er blevet `læser avis …`. Syv skærme render uden `undefined`/`NaN`.
+- Vandret overløb er målt side for side mod versionen fra 17. november: identisk på alle syv skærme og alle tre bredder, så runnet har ikke indført noget. `index.html` har 10 px overløb ved 320 px — det gjorde den også før.
+
+Kendt skønhedsfejl: ved 320 px bredde ombryder proteinrækken, så `Vegetar` havner under labelen i stedet for under de øvrige chips. Ikke et brud, men det bør rettes i et senere run frem for i hånden.
+
+Rækkefølgen er: run → min gennemgang af de syv skærme med målinger → din godkendelse → først derefter kodefasen.
 
 1. **Rabatlinjerne på bonen.** Tre af de 14 linjer skal vise listepris, rabat og nettosum (`Kyllingebryst · Liste 34,95 · Lidl Plus −5,00 · 29,95`), og den underliggende aritmetik skal stå i klartekst over listen: **Varer 259,00 kr − rabatter 12,00 kr (3 linjer) = 247,00 kr**. Det gør den aritmetiske gate synlig i stedet for at være en påstand, og allokeringen er uændret 176,45 + 70,55.
 2. **To aktive filtre var tvetydige.** Rækken med `Alle proteiner / Vegetar` skal have en lille `PROTEIN`-label og mindre chip-højde, så det fremgår at `Alle` i kategorirækken og `Vegetar` i proteinrækken er to dimensioner, ikke dobbeltvalg i én gruppe.
