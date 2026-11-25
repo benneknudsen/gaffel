@@ -190,16 +190,16 @@ Det der gør arbejdet læsbart for en fremmed — og for en ansætter: `componen
 
 CV-formuleringer, interview-svar og hvad der ikke må overdrives ligger i jobstack-repoet (`~/code/ai-job-search/documents/projekter/gaffel-cv-materiale.md`) — ikke her, i et offentligt repo.
 
-### 1.11 Designet er låst 2026-11-25 — fire rettelser
+### 1.11 Fire designrettelser — specifikation, afventer OpenDesign-run
 
-Prototypen i OpenDesign er den UI-kilde koden skal porteres 1:1 fra. Fire ting blev rettet, fordi de enten manglede eller påstod noget appen ikke må gøre:
+Prototypen i OpenDesign er den UI-kilde koden skal porteres 1:1 fra, og **enhver designændring går gennem `start_run`** — samme sporing som kode går gennem `oc-issue`. De fire rettelser nedenfor er specificeret og ligger klar som run-prompt i `~/Desktop/gaffel-opendesign/gaffel-design-fixes-v8.md`. Indtil det run er kørt og godkendt, står prototypen urørt på versionen fra 17. november (verificeret fil for fil mod appens egen `.file-versions/`).
 
-1. **Rabatlinjerne på bonen.** Tre af de 14 linjer har nu listepris, rabat og nettosum (`Kyllingebryst · Liste 34,95 · Lidl Plus −5,00 · 29,95`), og den underliggende aritmetik står i klartekst over listen: **Varer 259,00 kr − rabatter 12,00 kr (3 linjer) = 247,00 kr**. Det gør investeringen i den aritmetiske gate synlig i stedet for at være en påstand, og allokeringen er uændret 176,45 + 70,55.
-2. **To aktive filtre var tvetydige.** Rækken med `Alle proteiner / Vegetar` har nu en lille `PROTEIN`-label og mindre chip-højde, så det fremgår at `Alle` i kategorirækken og `Vegetar` i proteinrækken er to dimensioner, ikke dobbeltvalg i én gruppe.
-3. **Allergener i husstanden.** Opsætningen har et eget felt (2×4, de otte hyppigste af EU-14) med teksten "Hårdt filter: retter med allergenet skjules helt", og det gemmes i `gaffel-setup-v1`. Børnefilterets `Uden nødder` er fjernet — et allergen skal ikke være et separat, blødt filter ved siden af det rigtige. Antallet vises i trinopsummeringen ("2 voksne + 1 barn (Sommer) · 2 allergener") og i kvitteringsskærmens opsummering.
-4. **Copy der lovede for meget.** Fem sætninger sagde at *gaffel* læser butikkernes aviser. De siger nu at gaffel bruger *de tilbud, du har hentet ind* (forside, opskrifter ×2, ugestart ×2, indkøb), og loader-linjen "henter avis …" er blevet "læser avis …". Det er den samme begrænsning som 7.8/7.9, bare i brugergrænsefladen — og den dag en godkendt kilde kommer ind, er det kun copy der skal tilbage.
+1. **Rabatlinjerne på bonen.** Tre af de 14 linjer skal vise listepris, rabat og nettosum (`Kyllingebryst · Liste 34,95 · Lidl Plus −5,00 · 29,95`), og den underliggende aritmetik skal stå i klartekst over listen: **Varer 259,00 kr − rabatter 12,00 kr (3 linjer) = 247,00 kr**. Det gør den aritmetiske gate synlig i stedet for at være en påstand, og allokeringen er uændret 176,45 + 70,55.
+2. **To aktive filtre var tvetydige.** Rækken med `Alle proteiner / Vegetar` skal have en lille `PROTEIN`-label og mindre chip-højde, så det fremgår at `Alle` i kategorirækken og `Vegetar` i proteinrækken er to dimensioner, ikke dobbeltvalg i én gruppe.
+3. **Allergener i husstanden.** Opsætningen skal have et eget felt (2×4, de otte hyppigste af EU-14) med teksten "Hårdt filter: retter med allergenet skjules helt", gemt i `gaffel-setup-v1`. Børnefilterets `Uden nødder` fjernes — et allergen skal ikke være et separat, blødt filter ved siden af det rigtige. Antallet skal vises i trinopsummeringen ("2 voksne + 1 barn (Sommer) · 2 allergener") og i kvitteringsskærmens opsummering.
+4. **Copy der lovede for meget.** Seks sætninger siger at *gaffel* læser butikkernes aviser. De skal sige at gaffel bruger *de tilbud, du har hentet ind* (forside, opskrifter ×2, ugestart ×2, indkøb), og loader-linjen "henter avis …" bliver "læser avis …". Det er den samme begrænsning som 7.8/7.9, bare i brugergrænsefladen — og den dag en godkendt kilde kommer ind, er det kun copy der skal tilbage.
 
-Verificeret i browseren på den kørende prototype: bonen summerer til 247,00 med 3 rabattered linjer, allergenvalg overlever en fuld opsætningsrunde, og alle syv skærme render uden `undefined` eller brudte layouts.
+Rækkefølgen er: run → min gennemgang af de syv skærme med målinger → din godkendelse → først derefter kodefasen.
 
 ---
 
