@@ -459,7 +459,31 @@ Verificeret 2026-11-25: maskinen kører allerede 12 containere (Prowlarr, Sonarr
 Tre ting der gør det *smartere* end bare "endnu en container":
 
 1. **Portabilitet frem for binding.** Alt ligger i `docker-compose.yml` i repoet: SQLite som volume, alle hemmeligheder som env. Så er Mac'en et valg, ikke en arkitektur — den dag familien faktisk afhænger af det, er flytning til en lille VPS `docker compose up` på en ny maskine plus en kopi af volume't. macOS-opdateringer og genstarter er den reelle tilgængelighedsrisiko, ikke hardwaren.
-2. **Cache-først tilbudsdata.** Tabel `offers(chain, week, fetched_at)`: én hentning pr. kæde pr. uge pr. instans — ikke pr. husstand. Så er eksterne kilder et ugentligt job, ikke en afhængighed i hvert sidevisning, og appen virker offline fra cachen.
-3. **MCP ud af request-pathen.** MCP er et agent-protokol til dine egne værktøjer, ikke en produktions-API for en webapp: familiens app må ikke gå ned fordi Hermes eller en MCP-server ikke kører. Produktionsstien bliver `lib/offers/adapters/*.ts` med cache og fejltolerance; MCP kan bruges i *dine* arbejdsgange (fejlsøgning, udfyldning af huller). Kildens vilkår og rate limits skal respekteres — én hentning pr. kæde pr. uge er både høfligt og billigt.
+2. **Cache-først tilbudsdata, opdateret dagligt.** Tabellerne `offers(chain, week, fetched_at)` og `assortment(chain, ean, price, seen_at)`: ét dagligt job pr. kæde pr. instans — ikke pr. husstand og ikke pr. sidevisning. Dagligt fordi tilbudsaviser ikke skifter samme ugedag i alle kæder, fordi priser ændres midt i ugen, og fordi madspildspriser skifter time for time. Appen læser altid fra cachen og virker offline; et fejlet job giver gamle data med synligt tidsstempel i stedet for en tom skærm.
+3. **MCP ud af request-pathen.** MCP er et agent-protokol til dine egne værktøjer, ikke en produktions-API for en webapp: familiens app må ikke gå ned fordi Hermes eller en MCP-server ikke kører. Produktionsstien bliver `lib/offers/adapters/*.ts` med cache og fejltolerance; MCP kan bruges i *dine* arbejdsgange (fejlsøgning, udfyldning af huller). Kildens vilkår og rate limits skal respekteres — ét dagligt kald pr. kæde er både høfligt og billigt.
 
-**Før noget eksponeres offentligt:** rate limiting på login/invite, secure cookies, HTTPS-only, ingen signup-rute, og bekræft at det der allerede ligger på funnel-roden (:9119) er bag auth.
+**Afklaret 2026-11-25:** Mac + Docker er fint til første fase, hvor det kun er egen husstand. VPS-flytningen er en senere operation, ikke en forudsætning for at gå i gang.
+
+**Før noget eksponeres offentligt:** rate limiting på login/invite, secure cookies, HTTPS-only, ingen signup-rute.
+
+**Verificeret 2026-11-25:** funnel-roden (`:9119`) er Hermes' web-UI og er bag auth — `/` → 302 til `/login?next=%2F`, `/login` svarer 200 med titlen "Sign in — Hermes Agent", `/api/sessions` og `/api/models` svarer 401, `/docs` og `/openapi.json` redirecter. Eneste åbne rute er `/api/health`, som kun returnerer `ok`, version og commit. Gaffel skal derfor have egen port og eget domæne — ikke genbrug af roden.
+
+### 7.7 Datakilder: tilbud, sortiment og allergener
+
+Der findes **ingen kilde der giver hele sortimentet for alle danske kæder** — indkøbspriser og sortiment er butikkernes egne data. Det der findes, er fire forskellige slags data, og de skal holdes adskilt:
+
+| Kilde | Dækker | Giver | Dækker **ikke** |
+|---|---|---|---|
+| **Salling Product Suggestions** (officiel, gratis nøgle) | Bilka ToGo | Søgning på fritekst → rigtige varer **med pris**, EAN, billede, link. Også "lignende varer" og "købes ofte sammen" | Netto/Føtex-sortiment, tilbudsaviser |
+| **Salling Anti Food Waste** (officiel) | Netto, Føtex, Bilka, Basalt | Varer med **EAN, originalpris, ny pris, rabat, udløbstid** pr. butik — ~10.000 varer dagligt | Fuldt sortiment, faste priser |
+| **Tjek** (partner-API) | Alle kæder med tilbudsavis | Selve aviserne/katalogerne, som TilbudsTrolden bygger på | Sortiment, lager, faste priser |
+| **Open Food Facts** (åben, gratis) | Barcode-opslag | Vareoplysninger pr. EAN: navn, mærke, **allergener**, kategori, næringsdata | Dansk dækning er huller: test-EAN `5704000474742` findes **ikke** |
+| **Husstandens prisbog** (egen) | Præcis de butikker husstanden handler i | Hvad butikken faktisk fører, og hvad det koster — lært fra bonner | Varer husstanden aldrig har købt |
+
+**Beslutning:**
+
+- **Tilbud** hentes dagligt via Tjek-baserede kilder (TilbudsTrolden eller egen adapter).
+- **Sortiment** hentes fra Salling for de fire Salling-kæder (Product Suggestions giver Bilka ToGo-priser, Food Waste giver EAN-niveau for Netto/Føtex/Bilka/Basalt).
+- **Allergener** kommer fra vores egen opskriftsdata, og for købte varer fra EAN → Open Food Facts hvor varen findes; ellers markeres den som "ukendt" i stedet for at gætte. Et gæt på et allergen er værre end ingen oplysning.
+- **Coop, REMA 1000 og Lidl har ingen offentlig sortiments-API.** Deres app-API'er er uofficielle, ændrer sig uden varsel og er ikke noget en app til familien skal afhænge af. De dækkes via tilbudsavisene og via prisbogen.
+- **Prisbogen er grundsandheden** for hvad der findes i netop den butik husstanden handler i. Hver bon gør kataloget bedre — det er den eneste kilde der bliver stærkere af at blive brugt.
