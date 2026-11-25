@@ -527,3 +527,39 @@ Der er **ingen AI/ML-klausul** hos Salling. Til gengæld er §3.3 hårdere i pra
 3. **TilbudsTrolden-MCP er din, ikke appens.** Den er MIT-licenseret, kører lokalt og henter fra Tjek — fin til dine egne agent-arbejdsgange, men den må ikke være familiens datakilde, og dens output må ikke genudgives som appens katalog.
 4. **Salling-API'et er det eneste indbyggede kort** — fire kæder, 100 kald i døgnet, loyalt gengivet, slettet inden en måned.
 5. **Prisbogen bliver den vigtigste kilde**, fordi den er husstandens egen data og ikke er underlagt nogen af de to aftaler.
+
+### 7.9 Tre niveauer af brug — og hvad "uden indbygget tilbudskilde" betyder
+
+**Niveau 1 — egen husstand, egen maskine. Dette er planen, og det er lav risiko.** Du kører Gaffel i Docker på din egen maskine, data bliver i din SQLite-fil, og TilbudsTrolden kører i din Hermes-profil som det personlige værktøj den er. Det er præcis den form der ikke er "produktet der driver røret" — appen er et værktøj ved siden af dit eget værktøj. Ingen aftale bliver brudt, fordi der ikke er nogen aftale at bryde, og der er intet der distribueres videre.
+
+**Niveau 2 — familie og venner inviteret ind i din instans: gråzone.** Tjeks §8.4 peger på mønstret "lade tredjeparter systematisk hente eller genbruge indhold via kundens app". To husstande i din kælder er ikke distribution i nogen kommerciel forstand; tyve husstande begynder at ligne det. Den praktiske løsning er ikke at forbyde noget, men at vende røret: **hver husstand importerer sine egne tilbud**, så din instans ikke er den der henter Tjek-indhold på vegne af andre. Så er det deres eget værktøj, deres egen avis, deres egen import.
+
+**Niveau 3 — offentligt repo og brug af fremmede: ikke tilladt uden aftale.** Derfor ingen Tjek-klient i repoet. Den dag Tjek siger ja skriftligt (§8.3 åbner for det), er det en adapter mere — ikke en omskrivning.
+
+**"Uden indbygget tilbudskilde" betyder ikke "Gaffel uden tilbud".** Det betyder at containeren ikke selv går på `api.etilbudsavis.dk` efter et skema. Tilbuddene kommer stadig ind, bare ad en vej hvor det er brugerens eget værktøj der har hentet dem:
+
+```
+TilbudsTrolden (din Hermes) → JSON-fil → Gaffel import → inspirationsforslag, priser, ugeplan
+```
+
+**Importkontrakten** (én rute, samme tabel uanset kilde):
+
+```jsonc
+POST /api/offers/import
+{
+  "household_id": "…",
+  "source": "user-tool",          // "user-tool" | "photo" | "manual" | senere "tjek"
+  "fetched_at": "2026-11-25T07:00:00Z",
+  "offers": [
+    { "chain": "netto", "heading": "Kyllingebryst 500 g", "price": 39.0,
+      "pre_price": null, "valid_from": "2026-11-24", "valid_to": "2026-11-30",
+      "ean": "5701234567890", "unit": "kg" }
+  ]
+}
+```
+
+- Idempotent på `(chain, heading, valid_to)`, så en dobbeltimport ikke dublerer ugen.
+- UI'et viser **"Importeret af husstanden · 25. nov 07:00"** ved siden af tilbuddene. Kilden er synlig, og appen påstår ikke at den har hentet noget selv.
+- Kommer der en godkendt kilde senere, er det `source: "tjek"` i samme tabel — ingen ændring i UI eller ugeplan.
+
+**Og AI-delen:** §8.6 handler om at *træne, udvikle eller forbedre* modeller — ikke om at sende data med i en prompt. Men det er kun uproblematisk hvis udbyderen ikke bruger prompten til forbedring. Derfor tre regler: brug udbydere med no-training-garanti (eller lokal Ollama), send kun de felter der er nødvendige (kæde, vare, pris — ikke hele avisen), og lad den deterministiske motor lave matchningen mens modellen skriver om *husstandens egne opskrifter*. Så holder BYOK-løftet og vilkårene samtidig.
