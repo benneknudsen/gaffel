@@ -184,25 +184,11 @@ Pr. wrapper, manuelt, før den regnes som færdig:
 
 Plus screenshot-baseline pr. skærm. Det er gate'en — ikke et testframework.
 
-### 1.10 CV-referencen
+### 1.10 Bevis i repoet
 
-Det her er en af de få ting i projektet der er **reelt differentierende** i en ansøgning, fordi biblioteket er nyt (første beta i november 2026) og fordi det kræver en forståelse for *hvorfor* fokus, ARIA og tastatur er svært — ikke bare at man kan kalde en komponent.
+Det der gør arbejdet læsbart for en fremmed — og for en ansætter: `components/ui/*` med behaviors nævnt i header, `tokens.css` som eneste farvekilde, a11y-tjeklisten i 1.9 og screenshot-baseline pr. skærm. Det er den slags der kan læses uden at spørge om lov.
 
-**Dansk — brugbar formulering:**
-
-> Byggede UI-laget på UI SDK (`@ui-sdk/core`), et behaviors-bibliotek fra vercel-labs, hvor komponenter sammensættes af primitiver som `createPopup`, `createListbox`, `createTypeahead` og `createReorder`. Alle komponenter er ustylede og stylet udelukkende via design-tokens, så et eget designsystem kunne bevares 1:1. Fokus-styring, tastaturnavigation, ARIA-relationer og typeahead er dækket af biblioteket frem for håndskrevet kode.
-
-**Engelsk:**
-
-> Built the UI layer on UI SDK (`@ui-sdk/core`), a behaviors library from vercel-labs: components composed from primitives such as `createPopup`, `createListbox`, `createTypeahead` and `createReorder`. All parts are unstyled and styled exclusively through design tokens, preserving a custom design system 1:1. Focus management, keyboard navigation, ARIA relationships and typeahead behavior come from the library rather than hand-written code.
-
-**Sådan taler du om det i en samtale** (det er her det bliver troværdigt):
-
-- *Hvorfor:* "Interaktioner er den del af en UI man ikke ser, når den er rigtig. Jeg valgte et behaviors-lag frem for et komponentbibliotek, fordi designet var fastlagt først — jeg skulle bruge adfærd uden at få et look med."
-- *Hvad der var svært:* "Typeahead plus listbox plus popup oveni hinanden: fokus skal både blive i inputfeltet, flytte markering via `aria-activedescendant` og tilbage til triggeren ved Escape. Det er tre forskellige fokusmodeller i samme komponent."
-- *Hvad du ikke må påstå:* at biblioteket er stabilt (det er beta), eller at du har bygget behaviors selv. Sig at du sammensatte dem og styrede dem bag wrappers.
-
-**Det du kan dokumentere i repoet** (det er CV'ets bevis): `components/ui/*` med behaviors nævnt i header, `tokens.css` som eneste farvekilde, a11y-tjeklisten i 1.9 og screenshot-baselines pr. skærm.
+CV-formuleringer, interview-svar og hvad der ikke må overdrives ligger i jobstack-repoet (`~/code/ai-job-search/documents/projekter/gaffel-cv-materiale.md`) — ikke her, i et offentligt repo.
 
 ---
 
@@ -372,7 +358,7 @@ Repoet er tænkt offentligt, og **alt i git er læsbart for alle**. Det betyder:
 | Fil | Offentlig? | Begrundelse |
 |---|---|---|
 | `docs/kodefase-beslutninger.md` (dette dokument) | **Ja** | Det er bevis på beslutningstagning — målinger, afvejninger, hvad der blev valgt fra og hvorfor. Det er den slags fil der gør et hobbyrepo troværdigt. |
-| Afsnit 1.10 (CV-formuleringer og interview-svar) | **Nej** | Det er ansøgningsstrategi, ikke projektviden. Flyt til det private jobstack-repo (`~/code/ai-job-search`) eller en gitignored `notes/`. Resten af dokumentet bliver i repoet. |
+| CV- og ansøgningsmateriale | **Nej** | Flyttet 2026-11-25 til det private jobstack-repo (`documents/projekter/gaffel-cv-materiale.md`). Afsnit 1.10 her peger derhen. |
 | Bon-fixtures | **Kun anonymiserede** | Butik, dato og hvad husstanden har købt er persondata. Beløb og linjestruktur er nok til at teste parseren. |
 | `.env.local`, nøgler | **Nej, aldrig** | Gælder også eksempel-filer: `.env.example` med tomme værdier, intet andet. |
 
