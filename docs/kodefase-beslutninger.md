@@ -449,3 +449,17 @@ household_prefs  household_id, butikker[], børnefilter, ugens aftener (3–5)
 1. **Skal den hostede instans bygges i v1, eller først når nogen spørger?** Anbefaling: først når nogen spørger — men schema og dataadgang skal være klar til det.
 2. **Login-metode ved hostet drift:** magic link eller husstands-invite-kode som eneste indgang? (Invite-kode alene er færrest friktionspunkter, men et mistet link betyder mistet husstand.)
 3. **Samtykke til bon-billeder:** skal OCR kunne køre helt lokalt (Ollama vision / Tesseract) for de husstande der ikke vil sende bonnen nogen steder?
+
+### 7.6 Hosting-topologi — samme mønster som Seerr
+
+Verificeret 2026-11-25: maskinen kører allerede 12 containere (Prowlarr, Sonarr, Radarr, Portainer, **seerr** på :5055, Tautulli, Kometa, Watchtower …), `sleep 0` (sover aldrig på strøm), uptime 5 dage, og Tailscale Funnel eksponerer :443 → `127.0.0.1:9119`, :10000 (OpenDesign) og :8443.
+
+**Beslutning:** Gaffel bliver endnu en container på samme maskine, med eget domæne/port — ikke på funnel-roden. Invitation sker som i Seerr: du opretter husstanden og giver et link/en kode. Ingen offentlig signup.
+
+Tre ting der gør det *smartere* end bare "endnu en container":
+
+1. **Portabilitet frem for binding.** Alt ligger i `docker-compose.yml` i repoet: SQLite som volume, alle hemmeligheder som env. Så er Mac'en et valg, ikke en arkitektur — den dag familien faktisk afhænger af det, er flytning til en lille VPS `docker compose up` på en ny maskine plus en kopi af volume't. macOS-opdateringer og genstarter er den reelle tilgængelighedsrisiko, ikke hardwaren.
+2. **Cache-først tilbudsdata.** Tabel `offers(chain, week, fetched_at)`: én hentning pr. kæde pr. uge pr. instans — ikke pr. husstand. Så er eksterne kilder et ugentligt job, ikke en afhængighed i hvert sidevisning, og appen virker offline fra cachen.
+3. **MCP ud af request-pathen.** MCP er et agent-protokol til dine egne værktøjer, ikke en produktions-API for en webapp: familiens app må ikke gå ned fordi Hermes eller en MCP-server ikke kører. Produktionsstien bliver `lib/offers/adapters/*.ts` med cache og fejltolerance; MCP kan bruges i *dine* arbejdsgange (fejlsøgning, udfyldning af huller). Kildens vilkår og rate limits skal respekteres — én hentning pr. kæde pr. uge er både høfligt og billigt.
+
+**Før noget eksponeres offentligt:** rate limiting på login/invite, secure cookies, HTTPS-only, ingen signup-rute, og bekræft at det der allerede ligger på funnel-roden (:9119) er bag auth.
