@@ -482,8 +482,48 @@ Der findes **ingen kilde der giver hele sortimentet for alle danske kæder** —
 
 **Beslutning:**
 
-- **Tilbud** hentes dagligt via Tjek-baserede kilder (TilbudsTrolden eller egen adapter).
-- **Sortiment** hentes fra Salling for de fire Salling-kæder (Product Suggestions giver Bilka ToGo-priser, Food Waste giver EAN-niveau for Netto/Føtex/Bilka/Basalt).
+- **Tilbudsaviser hentes ikke af Gaffel selv.** Tjeks vilkår forbyder det (§8.4 og §8.6, se 7.8). Tilbud kommer ind ad tre tilladte veje: brugerens egen avis-foto/indtastning, en JSON-import som brugerens eget værktøj har lavet, eller Tjeks skriftlige godkendelse.
+- **Sortiment** hentes fra Sallings officielle API for de fire Salling-kæder — med deres kvote på **100 kald i døgnet pr. API**, loyalt gengivet og slettet senest en måned efter brug (§3.2–3.5).
 - **Allergener** kommer fra vores egen opskriftsdata, og for købte varer fra EAN → Open Food Facts hvor varen findes; ellers markeres den som "ukendt" i stedet for at gætte. Et gæt på et allergen er værre end ingen oplysning.
-- **Coop, REMA 1000 og Lidl har ingen offentlig sortiments-API.** Deres app-API'er er uofficielle, ændrer sig uden varsel og er ikke noget en app til familien skal afhænge af. De dækkes via tilbudsavisene og via prisbogen.
+- **Coop, REMA 1000 og Lidl har ingen offentlig sortiments-API.** Deres app-API'er er uofficielle, ændrer sig uden varsel og er ikke noget en app til familien skal afhænge af. De dækkes via brugerens egne tilbudsaviser og via prisbogen.
 - **Prisbogen er grundsandheden** for hvad der findes i netop den butik husstanden handler i. Hver bon gør kataloget bedre — det er den eneste kilde der bliver stærkere af at blive brugt.
+
+### 7.8 Vilkår: hvad må vi faktisk med tilbudsdata
+
+Læst 2026-11-25, ordret fra kilderne. Dette er ikke juridisk rådgivning — det er de klausuler der afgør arkitekturen, og de skal læses igen hvis kilden ændrer vilkår.
+
+**Tjek** ("Tjek – Terms & Conditions", `tjek.com/terms`, afsnit 8 "Terms for API & Integrations"):
+
+| Klausul | Ordlyd, forkortet | Konsekvens |
+|---|---|---|
+| 8.2 | API må kun bruges til at levere de aftalte services **på kundens egne platforme**, defineret som platforme "owned and operated directly by the Customer" | Familien er tredjeparter, ikke "kundens egen platform" |
+| 8.3 | Brug uden for egne platforme — inkl. indlejring, framing, hotlinking — og **enhver kommerciel brug fra tredjeparter** kræver Tjeks forudgående skriftlige godkendelse | Der findes en godkendelsesvej; den skal vælges aktivt |
+| 8.4 | Kunden må ikke give tredjeparter adgang til API'er eller indhold, **ej heller lade tredjeparter systematisk hente eller genbruge indhold** via kundens app | Et dagligt job der fodrer flere husstande er præcis det forbudte mønster |
+| 8.5 | Fair use: **8.000.000 API-kald pr. måned pr. land**; Tjek kan måle og suspendere ved misbrug | Selv med aftale er der et loft |
+| 8.6 | Data må **ikke** bruges til at træne, udvikle eller forbedre AI-/ML-modeller, eller overlades til tredjeparter til det formål, uden skriftlig aftale | Copilot må ikke læse Tjek-indhold som grundlag for forslag |
+
+Bemærk: endepunktet `api.etilbudsavis.dk/v2` svarer **200 uden nøgle** (verificeret: ét kald mod `/offers/search` returnerede en rigtig tilbudsvare). Det gør det ikke tilladt — vilkårene gælder kunder, og uden aftale er der ingen licens overhovedet. At "det teknisk virker" er ikke det samme som "det må bruges".
+
+Tjek har desuden deres **egen officielle MCP** (`tjek.com/agents`), som forbinder Claude/ChatGPT til en Tjek-konto og de fire produkter Incito, Publications, Apps og Insights. Det er den sanktionerede AI-vej — men den er for forhandlere med Tjek-konto, ikke for en husstand der læser tilbudsaviser.
+
+**Salling Group** ("Developer Program Terms of use and API License Agreement v1.0", hentet fra developer-portalen):
+
+| Klausul | Ordlyd, forkortet | Konsekvens |
+|---|---|---|
+| 3.2 | Data må kun bruges til **at gøre data tilgængelige i udviklerens applikation**, og gengivelsen skal være "loyally reproduced and in the same manner as presented" | Vis tilbuddet som Salling viser det |
+| 3.3 | Data må **ikke ændres eller videregives** uden forudgående skriftlig samtykke | En model der omskriver tilbudstekst er en ændring |
+| 3.4 | Salling kan til enhver tid kræve at brugen ophører | Ingen afhængighed der ikke kan fjernes |
+| 3.5 | Data skal slettes løbende og **senest 1 måned** efter formålet er ophørt | Cache med udløb, ikke et arkiv |
+| 3.6 | Udviklersiden må ikke bruge persondata uden samtykke | Ingen kundeprofiler på Salling-data |
+| 4.1–4.2 | Gratis indtil videre; Salling kan kræve betaling med 14 dages varsel | Pris i dag er 0 kr., ikke en garanti |
+| Kvote | **100 kald pr. døgn** for Anti Food Waste og 100 for Product Suggestions | Pr. instans, ikke pr. husstand — cache er obligatorisk |
+
+Der er **ingen AI/ML-klausul** hos Salling. Til gengæld er §3.3 hårdere i praksis: data må ikke ændres, så Sallings tilbudstekst må ikke sendes gennem en model der omskriver den. Beslutningen bliver derfor: **modellen arbejder på husstandens egne data** (opskrifter, prisbog, ugeplan), og tilbud vises ordret i UI'et. Copilot må gerne sige "der er tilbud på kylling i Netto til 39,00" hvis tallet kommer fra den lokale tabel og vises ved siden af — men den må ikke digte eller omformulere tilbudsteksten.
+
+**Det betyder i praksis, for Gaffel:**
+
+1. **Ingen avis-scraper i repoet.** Den var ellers den oplagte v1-funktion, og den er den ene ting der ville gøre projektet upublicerbart.
+2. **Tre tilladte veje ind:** brugerens eget avis-foto/indtastning (egen dokumentation, eget brug), en JSON-import fra brugerens eget værktøj (røret er brugerens, ikke produktets), eller Tjeks skriftlige godkendelse hvis det skal bygges ind.
+3. **TilbudsTrolden-MCP er din, ikke appens.** Den er MIT-licenseret, kører lokalt og henter fra Tjek — fin til dine egne agent-arbejdsgange, men den må ikke være familiens datakilde, og dens output må ikke genudgives som appens katalog.
+4. **Salling-API'et er det eneste indbyggede kort** — fire kæder, 100 kald i døgnet, loyalt gengivet, slettet inden en måned.
+5. **Prisbogen bliver den vigtigste kilde**, fordi den er husstandens egen data og ikke er underlagt nogen af de to aftaler.
